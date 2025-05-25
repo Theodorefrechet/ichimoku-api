@@ -22,6 +22,41 @@ app.post('/webhook', async (req, res) => {
     return res.status(400).json({ message: 'client_id manquant' });
   }
 
+  // 1. Vérification du statut bot_active
+  const { data: user, error: userError } = await supabase
+    .from('users')
+    .select('bot_active')
+    .eq('client_id', data.client_id)
+    .single();
+
+  if (userError) {
+    console.error(userError);
+    return res.status(500).json({ message: "Erreur lors de la vérification du statut du bot." });
+  }
+
+  if (!user || !user.bot_active) {
+    return res.status(403).json({ message: "Bot inactif pour ce client. Signal ignoré." });
+  }
+
+  // 2. Insertion dans la table trades si bot actif
+  const { error } = await supabase
+    .from('trades')
+    .insert([{
+      client_id: data.client_id,
+      texte_du_symbole: data.symbol,
+      texte_du_signal: data.signal,
+      horodatage: data.time,
+      prix: data.price ? parseFloat(data.price) : null,
+    }]);
+
+  if (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Erreur lors de l'enregistrement dans Supabase." });
+  }
+
+  res.status(200).json({ message: 'Signal enregistré pour client ' + data.client_id });
+});
+
   // Insertion dans la table trades de Supabase
   const { error } = await supabase
     .from('trades')
